@@ -168,7 +168,7 @@ class OpPipeTransformerBlockList(torch.autograd.Function):
         layers_dict = [{} for _ in range(len(self))]
         args_list = [[] for _ in range(num_micros)]
         batch_related = args[-1]
-        batch_related_origin = [True if i in args[-1] else False for i in range(len(args[:-1]))]
+        batch_related_origin = [i in args[-1] for i in range(len(args[:-1]))]
         batch_related_rule = []
         args = args[:-1]
         batch_size = hidden_state.shape[0]
@@ -189,7 +189,10 @@ class OpPipeTransformerBlockList(torch.autograd.Function):
                         batch_related_rule.append(False)
                         # assert num_micros % self.stages == 0, "batch unrelated only support num_micros % stages == 0"
                         # arg_all = [arg_all[i // (num_micros // self.stages)].detach().requires_grad_(arg.requires_grad) for i in range(num_micros)]
-                        arg_all = [arg_all[0].detach().requires_grad_(arg.requires_grad) for i in range(num_micros)]
+                        arg_all = [
+                            arg_all[0].detach().requires_grad_(arg.requires_grad)
+                            for _ in range(num_micros)
+                        ]
                     input_requires_grad.append(arg.requires_grad)
                 else:
                     batch_related_rule.append(False)
@@ -371,10 +374,7 @@ class PipelineTransformerBlockList(torch.nn.Module):
         args.append(batch_related)
         outputs = OpPipeTransformerBlockList.apply(placeholder, self, self.save_list, hidden_state, *args)
         hidden_state, middle_states = outputs[:2]
-        if return_hidden_states:
-            return hidden_state, middle_states
-        else:
-            return hidden_state
+        return (hidden_state, middle_states) if return_hidden_states else hidden_state
 
     def get_range_by_stage_id(self, stage_id : int) -> List[int]:
         part_lens = [0]+[self.get_part_len_by_stage_id(i) for i in range(stage_id+1)]
@@ -416,7 +416,7 @@ class PipelineTransformerBlockList(torch.nn.Module):
                     dtype = self[i]._storage_params[kw].dtype
                     device = self[i]._storage_params[kw].device
                     self[i]._storage_params[kw] = \
-                        torch.nn.Parameter(torch.tensor([0], dtype = dtype, device=device))
+                            torch.nn.Parameter(torch.tensor([0], dtype = dtype, device=device))
             else:
                 for kw, val in self[i]._storage_info.items():
                     storage_type = val["storage_type"]
@@ -445,7 +445,7 @@ class PipelineTransformerBlockList(torch.nn.Module):
                     storage_end = storage_info["end"]
                     param_st = param_info["offset"]
                     param_end = param_st + param_info["size"]
-                    if not (param_st >= storage_end or param_end <= storage_st):
+                    if param_st < storage_end and param_end > storage_st:
                         # copy offset in parameter storage
                         offset_st = max(storage_st - param_st, 0)
                         offset_end = min(storage_end - param_st, param_info["size"])
@@ -458,7 +458,7 @@ class PipelineTransformerBlockList(torch.nn.Module):
                         param_info["begin"] = to_offset_st
                         param_info["end"] = (to_offset_end - to_offset_st,)
                         param.data[:] = \
-                            torch.tensor([], dtype=d_dtype, device=d_device).set_(contiguous_params[kw], storage_st+to_offset_st, (to_offset_end - to_offset_st,))[:]
+                                torch.tensor([], dtype=d_dtype, device=d_device).set_(contiguous_params[kw], storage_st+to_offset_st, (to_offset_end - to_offset_st,))[:]
                     else:
                         param.data = torch.tensor([], dtype=param.dtype, device=param.device)
             del contiguous_params

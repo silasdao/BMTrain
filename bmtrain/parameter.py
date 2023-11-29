@@ -117,9 +117,7 @@ class OpAllGather(torch.autograd.Function):
 
         grad_storage = grad_output.storage_type()(ctx.partition_size)
         grad_output_storage = grad_output.storage()
-        if grad_output_storage.size() == ctx.partition_size * config['world_size']:
-            pass
-        else:
+        if grad_output_storage.size() != ctx.partition_size * config['world_size']:
             grad_output_storage.resize_(ctx.partition_size * config['world_size'])
         nccl.reduceScatter(
             grad_output_storage,

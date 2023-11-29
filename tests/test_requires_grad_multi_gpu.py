@@ -26,8 +26,7 @@ class Linear(bmt.DistributedModule):
             self.bias = bmt.DistributedParameter(torch.empty(out_features, dtype=torch.float, device="cuda"), init_method=torch.nn.init.zeros_)
     
     def forward(self, input):
-        ret = F.linear(input, self.weight, self.bias)
-        return ret
+        return F.linear(input, self.weight, self.bias)
 
 def run(m, a, b):
     inp = torch.rand((1, 10, 256)).cuda()*100
@@ -35,10 +34,7 @@ def run(m, a, b):
     loss = logits.sum()
     loss.backward()
 
-    sm = bmt.inspect.format_summary(
-            bmt.inspect.inspect_model(m, '*')
-        )
-    return sm
+    return bmt.inspect.format_summary(bmt.inspect.inspect_model(m, '*'))
 
 def test_main():
     a = Linear(256, 256)

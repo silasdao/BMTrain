@@ -19,13 +19,12 @@ def test_main():
         x[p] = 2
         check(x, 0)
         p = random.randint(0, i-1)
-        x[p] = 0
-        x[p] = x[p] / 0
+        x[p] = 1
         check(x, 1)
         p = random.randint(0, i-1)
-        x[p] = x[p] / 0
+        x[p] /= 0
         p = random.randint(0, i-1)
-        x[p] = x[p] / 0
+        x[p] /= 0
         check(x, 1)
 
 if __name__ == "__main__":

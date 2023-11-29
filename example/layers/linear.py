@@ -18,6 +18,4 @@ class Linear(bmt.DistributedModule):
         return F.linear(input, self.weight, self.bias)
 
     def extra_repr(self) -> str:
-        return 'in_features={}, out_features={}, bias={}'.format(
-            self.in_features, self.out_features, self.bias is not None
-        )
+        return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'

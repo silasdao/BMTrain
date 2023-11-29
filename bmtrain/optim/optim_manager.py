@@ -181,7 +181,7 @@ class OptimManager:
         else:
             norm_type = float(norm_type)
             total_norm_cuda = torch.cuda.FloatTensor([0])
-            for index, g in enumerate(grads):
+            for g in grads:
                 param_norm = g.data.float().norm(norm_type)
                 total_norm_cuda += param_norm ** norm_type
             nccl.allReduce(total_norm_cuda.storage(), total_norm_cuda.storage(), "sum", config["comm"])

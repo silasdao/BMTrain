@@ -60,7 +60,7 @@ class Attention(torch.nn.Module):
 
         if position_bias is not None:
             score = score + position_bias.view(batch_size, self.num_heads, seq_q, seq_kv)
-        
+
         score = torch.where(
             mask.view(batch_size, 1, seq_q, seq_kv),
             score,
@@ -82,8 +82,7 @@ class Attention(torch.nn.Module):
         h_out = h_out.permute(0, 2, 1, 3).contiguous()
         h_out = h_out.view(batch_size, seq_q, self.num_heads * self.dim_head)
 
-        attn_out = self.project_out(h_out)
-        return attn_out
+        return self.project_out(h_out)
         
 class Feedforward(torch.nn.Module):
     def __init__(self, dim_model : int, dim_ff : int, bias : bool = True, dtype = None) -> None:
@@ -167,9 +166,7 @@ class GPT(torch.nn.Module):
             out = layer(out, position_bias=None, mask=mask_2d)
         out = self.layernorm(out)
 
-        logits = F.linear(out, self.word_emb.weight) / math.sqrt(self.dim_model)
-
-        return logits
+        return F.linear(out, self.word_emb.weight) / math.sqrt(self.dim_model)
 
 def test_main():
     model = GPT(

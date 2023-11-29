@@ -18,7 +18,7 @@ class OpCheckpointBlock(torch.autograd.Function):
     def forward(ctx, placeholder, block : 'CheckpointBlock', preserve_rng_state, len_args, *args):
         ctx.block = block
         ctx.preserve_rng_state = preserve_rng_state
-        
+
         ctx.cuda_rng_state = torch.cuda.get_rng_state() if preserve_rng_state else None
         tensors = []
         others = []
@@ -34,26 +34,21 @@ class OpCheckpointBlock(torch.autograd.Function):
         ctx.len_args = len_args
         ctx.save_for_backward(*tensors)
         ctx.param_dict={}
-        if config['zero_level'] == 2:
-            flag = 1
-        else:
-            flag = 0
-        with torch.no_grad(), ScopedTensorInspectorContext() as inspector, CheckpointBlockContext(block, ctx.param_dict, flag):
+        flag = 1 if config['zero_level'] == 2 else 0
+        with (torch.no_grad(), ScopedTensorInspectorContext() as inspector, CheckpointBlockContext(block, ctx.param_dict, flag)):
             inp_args = args[:len_args]
-            inp_kwargs = {}
-            for k, v in zip(args[len_args::2], args[len_args + 1::2]):
-                inp_kwargs[k] = v
+            inp_kwargs = dict(zip(args[len_args::2], args[len_args + 1::2]))
             outputs = ctx.block._module._call_impl(*inp_args, **inp_kwargs)
         for it in inspector.hidden_states:
             debug.append("_inspect_hidden_states", it)
         ctx.inspect_list = inspector.hidden_states
 
-        if not isinstance(outputs, list) and not isinstance(outputs, tuple):
-            outputs = [outputs]
-            len_outputs = 0
-        else:
+        if isinstance(outputs, (list, tuple)):
             outputs = list(outputs)
             len_outputs = len(outputs)
+        else:
+            outputs = [outputs]
+            len_outputs = 0
         return tuple([len_outputs] + outputs + [hidden_state["tensor"] for hidden_state in inspector.hidden_states])
 
     @staticmethod
@@ -77,24 +72,19 @@ class OpCheckpointBlock(torch.autograd.Function):
                 nw_tensor.requires_grad = tensor.requires_grad
                 all_inputs.append(nw_tensor)
 
-        
+
         with torch.random.fork_rng(devices=[torch.cuda.current_device()], enabled=ctx.preserve_rng_state):
             if ctx.preserve_rng_state:
                 torch.cuda.set_rng_state(ctx.cuda_rng_state)
-                if config['zero_level'] == 2:
-                    flag = 2
-                else:
-                    flag = 0
-            with torch.enable_grad(), CheckpointBlockContext(ctx.block, ctx.param_dict, flag):
+                flag = 2 if config['zero_level'] == 2 else 0
+            with (torch.enable_grad(), CheckpointBlockContext(ctx.block, ctx.param_dict, flag)):
                 inp_args = all_inputs[:len_args]
-                inp_kwargs = {}
-                for k, v in zip(all_inputs[len_args::2], all_inputs[len_args + 1::2]):
-                    inp_kwargs[k] = v
+                inp_kwargs = dict(zip(all_inputs[len_args::2], all_inputs[len_args + 1::2]))
                 with ScopedTensorInspectorContext() as inspector:
                     outputs = ctx.block._module._call_impl(*inp_args, **inp_kwargs)
                 if not isinstance(outputs, tuple):
                     outputs = (outputs,)
-    
+
                 assert len(outputs) + len(inspector.hidden_states) == len(grads)
 
                 outputs_with_grad = []
@@ -114,7 +104,7 @@ class OpCheckpointBlock(torch.autograd.Function):
                 assert it["name"] == ctx.inspect_list[i]["name"], "Backward step changed"
                 assert it["shape"] == ctx.inspect_list[i]["shape"], "Backward step changed"
                 assert it["group"] == ctx.inspect_list[i]["group"], "Backward step changed"
-                
+
                 # change the tensor in placeholder
                 ctx.inspect_list[i]["tensor"] = it["tensor"]
                 ctx.inspect_list[i]["requires_grad"] = it["requires_grad"]
@@ -137,10 +127,7 @@ class CheckpointBlockContext:
         self._grad_tensor = {}
         self.flag = flag
         self._need_release = False
-        if pipe:
-            self.comm = config["zero_comm"] 
-        else:
-            self.comm = config["comm"]
+        self.comm = config["zero_comm"] if pipe else config["comm"]
     def enter(self):
         """
         gather parameters
@@ -217,8 +204,7 @@ class CheckpointBlockContext:
             return
         self._need_release = False
         self.block._ready = False
-        requires_grad = torch.is_grad_enabled()
-        if requires_grad:
+        if requires_grad := torch.is_grad_enabled():
             for kw, val in self.block._storage_info.items():
                 local_param = self.block._storage_params[kw]
 
@@ -229,7 +215,7 @@ class CheckpointBlockContext:
                         local_param.grad = torch.tensor([], dtype=grad_storage.dtype, device=grad_storage.device).set_(grad_storage).zero_()
                     else:
                         self._grad_tensor[kw][val["begin"]:val["end"]] += local_param.grad
-            
+
             current_stream = torch.cuda.current_stream()
             config["load_stream"].wait_stream(current_stream)   # wait for backward
 
@@ -298,15 +284,13 @@ def storage_type_cuda(storage_type):
         torch.cuda.IntStorage: torch.cuda.IntStorage,
     }
     if storage_type not in STORAGE_MAP:
-        raise ValueError("Unknown storage type: {}".format(storage_type))
+        raise ValueError(f"Unknown storage type: {storage_type}")
     return STORAGE_MAP[storage_type]
 
 def _get_param_kw(param : DistributedParameter):
     type_name = str(param.dtype).split(".")[-1]
     grad_name = "_grad" if param.requires_grad else "_nograd"
-    group_name = ""
-    if param.group is not None:
-        group_name = "_g_" + param.group
+    group_name = f"_g_{param.group}" if param.group is not None else ""
     return type_name + grad_name + group_name
 
 class CheckpointBlock(torch.nn.Module):
@@ -388,7 +372,7 @@ class CheckpointBlock(torch.nn.Module):
             else:
                 storage_param.requires_grad_(False)
 
-        
+
             self._storage_params[kw] = storage_param
 
         # initialize parameters in module
@@ -413,12 +397,12 @@ class CheckpointBlock(torch.nn.Module):
             # copy values to buffer for normal parameter
             storage_st = self._storage_info[kw_name]["begin"]
             storage_end = self._storage_info[kw_name]["end"]
-            
+
             # make parameter contiguous in storage
             with torch.no_grad():
                 contiguous_param = OpAllGather.apply(param)
 
-            if not (param_st >= storage_end or param_end <= storage_st):
+            if param_st < storage_end and param_end > storage_st:
                 # copy offset in parameter storage
                 offset_st = max(storage_st - param_st, 0)
                 offset_end = min(storage_end - param_st, contiguous_param.numel())
@@ -427,7 +411,7 @@ class CheckpointBlock(torch.nn.Module):
                 # copy to offset in buffer storage
                 to_offset_st = offset_st + param_st - storage_st
                 to_offset_end = offset_end + param_st - storage_st
-                
+
                 # copy to buffer
                 # PyTorch 1.11 changed the API of storage.__getitem__
                 d_dtype = self._storage_params[kw_name].dtype
@@ -436,7 +420,7 @@ class CheckpointBlock(torch.nn.Module):
                 self._param_info[-1]["begin"] = to_offset_st
                 self._param_info[-1]["end"] = (to_offset_end - to_offset_st,)
                 param.data[:] = \
-                    torch.tensor([], dtype=d_dtype, device=d_device).set_(contiguous_param.storage(), offset_st, (offset_end - offset_st,))[:]
+                        torch.tensor([], dtype=d_dtype, device=d_device).set_(contiguous_param.storage(), offset_st, (offset_end - offset_st,))[:]
                 del contiguous_param
             else:
                 param.data = torch.tensor([], dtype=param.dtype, device=param.device)
@@ -444,7 +428,7 @@ class CheckpointBlock(torch.nn.Module):
             # clear parameter data, but keep the dtype and device
             setattr(param, "_in_checkpoint_block", True)
 
-        for kw in offsets.keys():
+        for kw in offsets:
             assert offsets[kw] == self._storage_info[kw]["total"]
     
     def __call__(self, *args, **kwargs):
@@ -452,16 +436,13 @@ class CheckpointBlock(torch.nn.Module):
         placeholder = torch.tensor([], requires_grad=torch.is_grad_enabled())
         all_inputs = list(args)
         for kw, val in kwargs.items():
-            all_inputs.append(kw)
-            all_inputs.append(val)
+            all_inputs.extend((kw, val))
         outputs = OpCheckpointBlock.apply(placeholder, self, True, len(args), *all_inputs)
         len_output = outputs[0]
         return outputs[1:1+len_output] if len_output > 0 else outputs[1]
 
     def __getattr__(self,name:str):
-        if name=="_module":
-            return self._module
-        return getattr(self._module, name)
+        return self._module if name=="_module" else getattr(self._module, name)
 
     def __setattr__(self, name, value):
         object.__setattr__(self, name, value)
@@ -495,9 +476,9 @@ class CheckpointBlock(torch.nn.Module):
                 if input_param.__class__.__name__ == "DistributedTensorWrapper":
                     input_param = input_param.broadcast()
                 if input_param.shape != it["shape"]:
-                    error_msgs.append('size mismatch for {}: copying a param with shape {} from checkpoint, '
-                                      'the shape in current model is {}.'
-                                      .format(key, input_param.shape, it["shape"]))
+                    error_msgs.append(
+                        f'size mismatch for {key}: copying a param with shape {input_param.shape} from checkpoint, the shape in current model is {it["shape"]}.'
+                    )
                     continue
                 param_st = it["offset"]
                 param_end = it["offset"] + it["size"]
@@ -510,24 +491,24 @@ class CheckpointBlock(torch.nn.Module):
                     continue
                 if param_end <= storage_st:
                     continue
-                    
+
                 # copy to buffer
                 assert input_param.numel() == it["size"]
                 contiguous_param = input_param.to(it["parameter"].dtype).cuda().contiguous()
-                
+
                 offset_st = max(storage_st - param_st, 0)
                 offset_end = min(storage_end - param_st, contiguous_param.numel())
                 assert offset_st < offset_end
 
                 to_offset_st = offset_st + param_st - storage_st
                 to_offset_end = offset_end + param_st - storage_st
-                
+
                 # copy to buffer
                 # PyTorch 1.11 changed the API of storage.__getitem__
                 d_dtype = self._storage_params[kw_name].dtype
                 d_device = self._storage_params[kw_name].device
                 torch.tensor([], dtype=d_dtype, device=d_device).set_(self._storage_params[kw_name].storage(), to_offset_st, (to_offset_end - to_offset_st,))[:] = \
-                    torch.tensor([], dtype=d_dtype, device=d_device).set_(contiguous_param.storage(), offset_st, (offset_end - offset_st,))[:]
+                        torch.tensor([], dtype=d_dtype, device=d_device).set_(contiguous_param.storage(), offset_st, (offset_end - offset_st,))[:]
                 del contiguous_param
             elif strict:
                 missing_keys.append(key)
@@ -545,23 +526,21 @@ class CheckpointBlock(torch.nn.Module):
 
                     if not is_param_lazy and not isinstance(param, DistributedParameter) and input_param.shape != param.shape:
                         # local shape should match the one in checkpoint
-                        error_msgs.append('size mismatch for {}: copying a param with shape {} from checkpoint, '
-                                        'the shape in current model is {}.'
-                                        .format(key, input_param.shape, param.shape))
+                        error_msgs.append(
+                            f'size mismatch for {key}: copying a param with shape {input_param.shape} from checkpoint, the shape in current model is {param.shape}.'
+                        )
                         continue
                     if not is_param_lazy and isinstance(param, DistributedParameter) and input_param.shape != param._original_shape:
-                        error_msgs.append('size mismatch for {}: copying a param with shape {} from checkpoint, '
-                                        'the shape in current model is {}.'
-                                        .format(key, input_param.shape, param.shape))
+                        error_msgs.append(
+                            f'size mismatch for {key}: copying a param with shape {input_param.shape} from checkpoint, the shape in current model is {param.shape}.'
+                        )
                     try:
                         with torch.no_grad():
                             param._copy_data(input_param)
                     except Exception as ex:
-                        error_msgs.append('While copying the parameter named "{}", '
-                                        'whose dimensions in the model are {} and '
-                                        'whose dimensions in the checkpoint are {}, '
-                                        'an exception occurred : {}.'
-                                        .format(key, param.size(), input_param.size(), ex.args))
+                        error_msgs.append(
+                            f'While copying the parameter named "{key}", whose dimensions in the model are {param.size()} and whose dimensions in the checkpoint are {input_param.size()}, an exception occurred : {ex.args}.'
+                        )
                 elif strict:
                     missing_keys.append(key)
 
@@ -577,8 +556,7 @@ class CheckpointBlock(torch.nn.Module):
             if val["group"] not in ret:
                 ret[val["group"]] = []
             ret[val["group"]].append(self._storage_params[kw])
-        for kw, val in ret.items():
-            yield kw, val
+        yield from ret.items()
 
     def init_parameters(self):
         """
@@ -670,8 +648,7 @@ class CheckpointBlock(torch.nn.Module):
                 if module is None:
                     continue
                 submodule_prefix = prefix + ('.' if prefix else '') + name
-                for m in module.named_modules(memo, submodule_prefix, remove_duplicate):
-                    yield m
+                yield from module.named_modules(memo, submodule_prefix, remove_duplicate)
 
     def named_children(self):
         return self._module.named_children()

@@ -53,7 +53,7 @@ def init_distributed(
         os.environ["MASTER_PORT"]="10010"
     addr = os.environ["MASTER_ADDR"]
     port = os.environ["MASTER_PORT"]
-    master = addr+":"+port
+    master = f"{addr}:{port}"
     timeout = datetime.timedelta(seconds=1800)
     rendezvous_iterator = dist.rendezvous(
         init_method, rank, world_size, timeout=timeout
@@ -78,11 +78,11 @@ def init_distributed(
     config["topology"] = topology(config)
     config["zero_rank"] = config["topology"].get_group_rank("zero") if pipe_size > 1 else config['rank']
     cpus_this_worker = None
-    
+
     all_available_cpus = sorted(list(os.sched_getaffinity(0)))
 
     cpus_per_worker = len(all_available_cpus) // local_size
-        
+
     if cpus_per_worker < 1:
         cpus_this_worker = all_available_cpus
         torch.set_num_threads(1)
@@ -98,11 +98,11 @@ def init_distributed(
         np.random.seed(seed)
     except ModuleNotFoundError:
         pass
-    
+
     if rank == 0:
         unique_id : bytes = nccl.getUniqueId()
         store.set("BMTRAIN_UNIQUE_ID", unique_id.hex() )
-    
+
     unique_id = bytes.fromhex(store.get("BMTRAIN_UNIQUE_ID").decode())
     config['comm'] = nccl.commInitRank(unique_id, world_size, rank)
     if config['pipe_enabled']:

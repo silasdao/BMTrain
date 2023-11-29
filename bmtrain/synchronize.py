@@ -46,7 +46,4 @@ def gather_result(result: torch.Tensor):
         ret.storage(),
         config['comm']
     )
-    if output_cuda:
-        return ret
-    else:
-        return ret.cpu()
+    return ret if output_cuda else ret.cpu()

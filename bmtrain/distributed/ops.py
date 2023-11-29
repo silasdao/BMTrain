@@ -109,7 +109,7 @@ class OpAllReduce(torch.autograd.Function):
         if input.storage_offset() != 0 or input.storage().size() != input.numel():
             input = input.clone()
         output = torch.empty( input.size(), dtype=input.dtype, device=input.device)
-        
+
         ncclAllReduce(
             input.storage(),
             output.storage(),
@@ -117,10 +117,10 @@ class OpAllReduce(torch.autograd.Function):
             comm
         )
         ctx.op = op
-        
-        if op in ["sum", "avg"]:
+
+        if op in {"sum", "avg"}:
             pass
-        elif op in ["max", "min"]:
+        elif op in {"max", "min"}:
             ctx.save_for_backward( input != output )
         else:
             ctx.save_for_backward( output / input )

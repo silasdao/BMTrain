@@ -57,7 +57,7 @@ class Attention(bmt.DistributedModule):
 
         if position_bias is not None:
             score = score + position_bias.view(batch_size, self.num_heads, seq_q, seq_kv)
-        
+
         score = torch.where(
             mask.view(batch_size, 1, seq_q, seq_kv),
             score,
@@ -79,8 +79,7 @@ class Attention(bmt.DistributedModule):
         h_out = h_out.permute(0, 2, 1, 3).contiguous()
         h_out = h_out.view(batch_size, seq_q, self.num_heads * self.dim_head)
 
-        attn_out = self.project_out(h_out)
-        return attn_out
+        return self.project_out(h_out)
         
 
         

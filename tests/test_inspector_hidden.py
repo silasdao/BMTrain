@@ -26,8 +26,7 @@ class Linear(bmt.DistributedModule):
             self.bias = bmt.DistributedParameter(torch.empty(out_features, dtype=torch.float, device="cuda"), init_method=torch.nn.init.zeros_)
     
     def forward(self, input):
-        ret = F.linear(input, self.weight, self.bias)
-        return ret
+        return F.linear(input, self.weight, self.bias)
 
 class L2(bmt.DistributedModule):
     def __init__(self, dim : int):
@@ -107,10 +106,7 @@ class Model_BLOCK(torch.nn.Module):
         for m in self.ms:
             o.append(y)
             y = m(y)
-        if return_hidden_states:
-            return self.post(y), o
-        else:
-            return self.post(y)
+        return (self.post(y), o) if return_hidden_states else self.post(y)
 
 class Model_NORMAL(torch.nn.Module):
     def __init__(self, pre, ms, post) -> None:
@@ -126,10 +122,7 @@ class Model_NORMAL(torch.nn.Module):
         for m in self.ms:
             o.append(y)
             y = m(y)
-        if return_hidden_states:
-            return self.post(y), o
-        else:
-            return self.post(y)
+        return (self.post(y), o) if return_hidden_states else self.post(y)
 
 def manual_seed(seed=33):
     torch.manual_seed(seed)
@@ -158,7 +151,7 @@ def sub_run(name, cls, num_layer, dim, batch, seq_len):
     bmt.init_parameters(post)
     for m in ms:
         bmt.init_parameters(m)
-    m = cls(pre, [m for m in ms], post)
+    m = cls(pre, list(ms), post)
     ret = ""
     with bmt.inspect.inspect_tensor() as inspector:
         logits = m(inp)
@@ -209,8 +202,7 @@ def run(name, cls, num_layer=4, dim=4096, batch=32, seq_len=256):
     return ret
 
 def test_main():
-    ret = {}
-    ret["normal"] = run("normal", Model_NORMAL)
+    ret = {"normal": run("normal", Model_NORMAL)}
     ret["block"] = run("block", Model_BLOCK)
     ret["zero"] = run("zero", Model_ZERO)
     ret["pipe"] = run("pipe", Model_PIPE)

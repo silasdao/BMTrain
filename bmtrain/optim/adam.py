@@ -17,16 +17,16 @@ class AdamOptimizer(torch.optim.Optimizer):
     _bmtrain_optimizer = True
 
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0, hold_steps=0):
-        if not 0.0 <= lr:
-            raise ValueError("Invalid learning rate: {}".format(lr))
-        if not 0.0 <= eps:
-            raise ValueError("Invalid epsilon value: {}".format(eps))
+        if lr < 0.0:
+            raise ValueError(f"Invalid learning rate: {lr}")
+        if eps < 0.0:
+            raise ValueError(f"Invalid epsilon value: {eps}")
         if not 0.0 <= betas[0] < 1.0:
-            raise ValueError("Invalid beta parameter at index 0: {}".format(betas[0]))
+            raise ValueError(f"Invalid beta parameter at index 0: {betas[0]}")
         if not 0.0 <= betas[1] < 1.0:
-            raise ValueError("Invalid beta parameter at index 1: {}".format(betas[1]))
-        if not 0.0 <= weight_decay:
-            raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
+            raise ValueError(f"Invalid beta parameter at index 1: {betas[1]}")
+        if weight_decay < 0.0:
+            raise ValueError(f"Invalid weight_decay value: {weight_decay}")
 
         defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
         super().__init__(params, defaults)
@@ -82,11 +82,11 @@ class AdamOptimizer(torch.optim.Optimizer):
                     # update the steps for each param group update
                     state['step'] += 1
 
-                    if ('maximize' in group) and (group['maximize'] is True):
-                        grad = -p.grad
-                    else:
-                        grad = p.grad
-                        
+                    grad = (
+                        -p.grad
+                        if ('maximize' in group) and (group['maximize'] is True)
+                        else p.grad
+                    )
                     if p.dtype == torch.half:
                         F.adam(
                             state["_param_fp32"],    # fp32
@@ -147,9 +147,12 @@ class AdamOptimizer(torch.optim.Optimizer):
                              "that doesn't match the size of optimizer's group")
 
         # Update the state
-        id_map = {old_id: p for old_id, p in
-                  zip(chain.from_iterable((g['params'] for g in saved_groups)),
-                      chain.from_iterable((g['params'] for g in groups)))}
+        id_map = dict(
+            zip(
+                chain.from_iterable((g['params'] for g in saved_groups)),
+                chain.from_iterable((g['params'] for g in groups)),
+            )
+        )
 
         # Copy state assigned to params (and cast tensors to appropriate types).
         # State that is not assigned to params is copied as is (needed for
@@ -175,6 +178,7 @@ class AdamOptimizer(torch.optim.Optimizer):
         def update_group(group, new_group):
             new_group['params'] = group['params']
             return new_group
+
         param_groups = [
             update_group(g, ng) for g, ng in zip(groups, saved_groups)]
         self.__setstate__({'state': state, 'param_groups': param_groups})

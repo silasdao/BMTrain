@@ -94,14 +94,14 @@ class DistributedModule(torch.nn.Module):
 
                 if not is_param_lazy and not isinstance(param, DistributedParameter) and input_param.shape != param.shape:
                     # local shape should match the one in checkpoint
-                    error_msgs.append('size mismatch for {}: copying a param with shape {} from checkpoint, '
-                                      'the shape in current model is {}.'
-                                      .format(key, input_param.shape, param.shape))
+                    error_msgs.append(
+                        f'size mismatch for {key}: copying a param with shape {input_param.shape} from checkpoint, the shape in current model is {param.shape}.'
+                    )
                     continue
                 if not is_param_lazy and isinstance(param, DistributedParameter) and input_param.shape != param._original_shape:
-                    error_msgs.append('size mismatch for {}: copying a param with shape {} from checkpoint, '
-                                      'the shape in current model is {}.'
-                                      .format(key, input_param.shape, param.shape))
+                    error_msgs.append(
+                        f'size mismatch for {key}: copying a param with shape {input_param.shape} from checkpoint, the shape in current model is {param.shape}.'
+                    )
                 try:
                     with torch.no_grad():
                         if isinstance(param, DistributedParameter):
@@ -109,11 +109,9 @@ class DistributedModule(torch.nn.Module):
                         else:
                             param.copy_(input_param)
                 except Exception as ex:
-                    error_msgs.append('While copying the parameter named "{}", '
-                                      'whose dimensions in the model are {} and '
-                                      'whose dimensions in the checkpoint are {}, '
-                                      'an exception occurred : {}.'
-                                      .format(key, param.size(), input_param.size(), ex.args))
+                    error_msgs.append(
+                        f'While copying the parameter named "{key}", whose dimensions in the model are {param.size()} and whose dimensions in the checkpoint are {input_param.size()}, an exception occurred : {ex.args}.'
+                    )
             elif strict:
                 missing_keys.append(key)
 

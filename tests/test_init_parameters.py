@@ -102,9 +102,7 @@ class Linear_ManualInitAfter(bmt.DistributedModule):
         return F.linear(input, self.weight, self.bias)
 
     def extra_repr(self) -> str:
-        return 'in_features={}, out_features={}, bias={}'.format(
-            self.in_features, self.out_features, self.bias is not None
-        )
+        return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
 
 class Linear_Pipeline(bmt.DistributedModule):
     def __init__(self, in_features : int, out_features: int, bias: bool = True, dtype = None) -> None:

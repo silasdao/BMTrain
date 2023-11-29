@@ -43,7 +43,7 @@ def dtype2nccl(dtype : torch.dtype) -> int:
         torch.bool : ncclBool
     }
     if dtype not in MAP:
-        raise TypeError("Unsupport dtype %s" % dtype)
+        raise TypeError(f"Unsupport dtype {dtype}")
     return MAP[dtype]
 
 def op2nccl(

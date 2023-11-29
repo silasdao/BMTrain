@@ -21,7 +21,7 @@ class InspectTensor:
         self._summary = summary
         for item in summary:
             item['prefix'] = "" if item["group"] is None else f'{item["group"]}.'
-            
+
         self.summary = []
 
         kw_cnt = {}
@@ -134,7 +134,7 @@ class InspectTensor:
                             tensor.grad = grad
                         it["shape"] = (it["shape"][0]//config["pipe_size"],) + it["shape"][1:]
 
-                i = i + config['micros'] * (j - i)
+                i += config['micros'] * (j - i)
             else:
                 kw = f'{item["prefix"]}{item["name"]}'
                 if kw not in kw_cnt:
@@ -155,7 +155,7 @@ class InspectTensor:
                     "inside_pipe": None,
                 })
                 kw_cnt[kw] += 1
-                i = i + 1
+                i += 1
 
 
     
@@ -181,8 +181,8 @@ class InspectTensor:
         for item in self.summary:
             comm = config["comm"]
 
-            if not item["requires_grad"] or item["tensor"].grad is None:
-                x = item["tensor"]
+            x = item["tensor"]
+            if not item["requires_grad"] or x.grad is None:
                 info = torch.empty(2, dtype=x.dtype, device=x.device)
                 info[0] = x.mean()
                 info[1] = x.var()
@@ -198,7 +198,6 @@ class InspectTensor:
                 grad_mean = None
                 grad_std = None
             else:
-                x = item["tensor"]
                 info = torch.empty(4, dtype=x.dtype, device=x.device)
                 info[0] = x.mean()
                 info[1] = x.var()
@@ -257,15 +256,16 @@ class InspectTensor:
 
         all_names = []
         if index is None:
-            all_names.append(f"{group_name_prefix}{name}")
-            all_names.append(f"{group_name_prefix}0.{name}")
+            all_names.extend(
+                (f"{group_name_prefix}{name}", f"{group_name_prefix}0.{name}")
+            )
         else:
             all_names.append(f"{group_name_prefix}{index}.{name}")
 
-        for item in self.summary:
-            if item["name"] in all_names:
-                return item["tensor"]
-        return None
+        return next(
+            (item["tensor"] for item in self.summary if item["name"] in all_names),
+            None,
+        )
 
 
 class InspectTensorManager:
@@ -274,12 +274,11 @@ class InspectTensorManager:
 
     def __enter__(self) -> InspectTensor:
         self.prev_val = debug.get("_inspect_tensor", False)
-        if not self.prev_val:
-            debug.set("_inspect_tensor", True)
-            self._inspector = InspectTensor()
-            return self._inspector
-        else:
+        if self.prev_val:
             raise RuntimeError("InspectTensorManager is already in use")
+        debug.set("_inspect_tensor", True)
+        self._inspector = InspectTensor()
+        return self._inspector
     
     def __exit__(self, *args):
         if not self.prev_val:

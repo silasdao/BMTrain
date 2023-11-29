@@ -37,15 +37,15 @@ def round_up(x, d):
     return (x + d - 1) // d * d
 
 def print_dict(title : str, content : Dict[str, Any], file=sys.stdout):
-    max_kw_len = max([ len(kw) for kw in content.keys() ])
+    max_kw_len = max(len(kw) for kw in content)
     max_kw_len = round_up(max_kw_len + 3, 4)
 
     raw_content = ""
 
     for kw, val in content.items():
-        raw_content += kw + " :" + " " * (max_kw_len - len(kw) - 2)
-        raw_val = "%s" % val
-        
+        raw_content += f"{kw} :" + " " * (max_kw_len - len(kw) - 2)
+        raw_val = f"{val}"
+
         len_val_row = ROW_WIDTH - max_kw_len
         st = 0
         if len(raw_val) == 0:
@@ -55,7 +55,7 @@ def print_dict(title : str, content : Dict[str, Any], file=sys.stdout):
                 raw_content += " " * max_kw_len
             raw_content += raw_val[st: st + len_val_row] + "\n"
             st += len_val_row
-    
+
     print_block(title, raw_content, file)
 
 

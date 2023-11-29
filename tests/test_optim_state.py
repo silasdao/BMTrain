@@ -63,9 +63,9 @@ def main():
 
     bmt.save(model1, "test_optim_state_model1.pt")
 
-    bmt.load(model1, f"test_optim_state_model1.pt")
-    bmt.load(model2, f"test_optim_state_model1.pt")
-    bmt.load(model3, f"test_optim_state_model1.pt")
+    bmt.load(model1, "test_optim_state_model1.pt")
+    bmt.load(model2, "test_optim_state_model1.pt")
+    bmt.load(model3, "test_optim_state_model1.pt")
 
     opt1 = bmt.optim.AdamOptimizer(model1.parameters(), weight_decay=1e-3)
     opt2 = bmt.optim.AdamOffloadOptimizer(model2.parameters(), weight_decay=1e-3)
@@ -77,9 +77,9 @@ def main():
 
     train(model1, model2, model3, optim_manager)
 
-    bmt.save(model1, f"test_optim_state_model1.pt")
-    bmt.save(model2, f"test_optim_state_model2.pt")
-    bmt.save(model3, f"test_optim_state_model3.pt")
+    bmt.save(model1, "test_optim_state_model1.pt")
+    bmt.save(model2, "test_optim_state_model2.pt")
+    bmt.save(model3, "test_optim_state_model3.pt")
 
     torch.save(opt1.state_dict(), f"test_optim_state_opt1_{bmt.rank()}.opt")
     torch.save(opt2.state_dict(), f"test_optim_state_opt2_{bmt.rank()}.opt")
@@ -89,9 +89,9 @@ def main():
     train(model1, model2, model3, optim_manager)
     state_2 = deepcopy([list(model1.parameters()), list(model2.parameters()), list(model3.parameters())])
 
-    bmt.load(model1, f"test_optim_state_model1.pt")
-    bmt.load(model2, f"test_optim_state_model2.pt")
-    bmt.load(model3, f"test_optim_state_model3.pt")
+    bmt.load(model1, "test_optim_state_model1.pt")
+    bmt.load(model2, "test_optim_state_model2.pt")
+    bmt.load(model3, "test_optim_state_model3.pt")
 
     opt1.load_state_dict(torch.load(f"test_optim_state_opt1_{bmt.rank()}.opt"))
     opt2.load_state_dict(torch.load(f"test_optim_state_opt2_{bmt.rank()}.opt"))
@@ -112,9 +112,9 @@ def main():
             assert (rp==p).all(), f"{kind} state load error"
 
     if bmt.rank() == 0:
-        os.remove(f"test_optim_state_model1.pt")
-        os.remove(f"test_optim_state_model2.pt")
-        os.remove(f"test_optim_state_model3.pt")
+        os.remove("test_optim_state_model1.pt")
+        os.remove("test_optim_state_model2.pt")
+        os.remove("test_optim_state_model3.pt")
     os.remove(f"test_optim_state_opt1_{bmt.rank()}.opt")
     os.remove(f"test_optim_state_opt2_{bmt.rank()}.opt")
     os.remove(f"test_optim_state_opt3_{bmt.rank()}.opt")

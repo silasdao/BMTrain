@@ -24,8 +24,7 @@ class Model_ZERO(torch.nn.Module):
         ], num_hidden=3)
     
     def forward(self, x):
-        y = self.ms(*x)
-        return y
+        return self.ms(*x)
 
 class Model_PIPE(torch.nn.Module):
     def __init__(self, ms) -> None:
@@ -36,8 +35,7 @@ class Model_PIPE(torch.nn.Module):
         ], num_hidden=3)
     
     def forward(self, x):
-        y = self.ms(*x)
-        return y
+        return self.ms(*x)
 
 class Model_BLOCK(torch.nn.Module):
     def __init__(self, ms) -> None:
@@ -78,7 +76,7 @@ def manual_seed(seed=33):
 def run(name, cls, num_layer=4, dim=4096):
     manual_seed()
 
-    ms = [MultiInputReturn() for i in range(num_layer)]
+    ms = [MultiInputReturn() for _ in range(num_layer)]
 
     inps = (
         torch.randn((dim,)).cuda(),
@@ -107,8 +105,7 @@ def run(name, cls, num_layer=4, dim=4096):
     ]
 
 def test_main():
-    ret = {}
-    ret["normal"] = run("normal", Model_NORMAL)
+    ret = {"normal": run("normal", Model_NORMAL)}
     ret["block"] = run("block", Model_BLOCK)
     ret["zero"] = run("zero", Model_ZERO)
     # ret["pipe"] = run("pipe", Model_PIPE) # TODO pipeline not support multiple input-output yet

@@ -68,6 +68,5 @@ def grouped_parameters(model : torch.nn.Module) -> Generator[Tuple[str, List[tor
                 if group not in ret:
                     ret[group] = []
                 ret[group].append(param)
-    for kw, val in ret.items():
-        yield kw, val
+    yield from ret.items()
 

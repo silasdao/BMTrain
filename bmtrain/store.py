@@ -10,15 +10,12 @@ import io, pickle
 from typing import Mapping
 
 def _save_to_state_dict(model : torch.nn.Module, destination, prefix):
+    if config['rank'] != 0:
+        destination = OrderedDict() # creates an temporary ordered dict
+        destination._metadata = OrderedDict()
     if isinstance(model, CheckpointBlock):
-        if config['rank'] != 0:
-            destination = OrderedDict() # creates an temporary ordered dict
-            destination._metadata = OrderedDict()
         model.state_dict(destination=destination, prefix=prefix, keep_vars=False)
     else:
-        if config['rank'] != 0:
-            destination = OrderedDict() # creates an temporary ordered dict
-            destination._metadata = OrderedDict()
         model._save_to_state_dict(destination, prefix, False)
 
 def _save_to_rank0(model : torch.nn.Module, destination=None, prefix=''):
@@ -171,15 +168,14 @@ class DistributedTensorWrapper:
         return self.tensor
     
     def __getattribute__(self, name):
-        if name == "tensor" or name == "shape":
+        if name in ["tensor", "shape"]:
             return object.__getattribute__(self, name)
-        else:
-            try:
-                return object.__getattribute__(self, name)
-            except AttributeError:
-                pass
+        try:
+            return object.__getattribute__(self, name)
+        except AttributeError:
+            pass
 
-            return getattr(self.tensor, name)
+        return getattr(self.tensor, name)
 
 class DistributedStateDictWrapper(Mapping):
     def __init__(self, state_dict : Dict) -> None:
@@ -192,8 +188,8 @@ class DistributedStateDictWrapper(Mapping):
             input_param : torch.Tensor = self._state_dict[key]
             shape_list = torch.tensor(list(input_param.size()), device="cuda", dtype=torch.int32)
             dtype_idx = DTYPE_LIST.index(input_param.dtype)
-            
-            assert dtype_idx != -1, "Unknown data type %s" % input_param.dtype
+
+            assert dtype_idx != -1, f"Unknown data type {input_param.dtype}"
 
             tmp_shape[0] = shape_list.size(0)
             tmp_shape[1] = dtype_idx

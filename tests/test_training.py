@@ -62,7 +62,7 @@ class Attention(torch.nn.Module):
 
         if position_bias is not None:
             score = score + position_bias.view(batch_size, self.num_heads, seq_q, seq_kv)
-        
+
         score = torch.where(
             mask.view(batch_size, 1, seq_q, seq_kv),
             score,
@@ -84,8 +84,7 @@ class Attention(torch.nn.Module):
         h_out = h_out.permute(0, 2, 1, 3).contiguous()
         h_out = h_out.view(batch_size, seq_q, self.num_heads * self.dim_head)
 
-        attn_out = self.project_out(h_out)
-        return attn_out
+        return self.project_out(h_out)
         
 class Feedforward(torch.nn.Module):
     def __init__(self, dim_model : int, dim_ff : int, bias : bool = True, dtype = None) -> None:
@@ -173,9 +172,7 @@ class GPT(torch.nn.Module):
             out = self.transformers(out, mask_2d, None)
         out = self.layernorm(out)
 
-        logits = F.linear(out, self.word_emb.weight) / math.sqrt(self.dim_model)
-
-        return logits
+        return F.linear(out, self.word_emb.weight) / math.sqrt(self.dim_model)
 
 def sub_train_torch(model, loss_func_cls, optimizer_cls):
     loss_func = loss_func_cls(ignore_index=-100)
@@ -195,7 +192,7 @@ def sub_train_torch(model, loss_func_cls, optimizer_cls):
     enc_inputs = []
     targetss = []
     masks = []
-    for i in range(bmt.world_size()):
+    for _ in range(bmt.world_size()):
         sent = torch.randint(0, 10240, (batch_size, seq_len + 1))
         enc_length = torch.randint(128, seq_len, (batch_size,)).long().cuda()
         enc_input = sent[:, :-1].long().cuda()
@@ -230,7 +227,7 @@ def sub_train_torch(model, loss_func_cls, optimizer_cls):
         batch, seq_len, vocab_out_size = logits.size()
 
         loss = loss_func(logits.view(batch * seq_len, vocab_out_size), targets.view(batch * seq_len))
-    
+
         global_loss = loss.item()
 
         loss = optim_manager.loss_scale * loss
@@ -363,7 +360,9 @@ def test_main(test_fp16=True, test_fp32=True):
     def list_model():
         model = GPT(**kwargs)
         list_model = bmt.BMTrainModelWrapper(model)
-        list_model.transformers = bmt.TransformerBlockList([m for m in list_model.transformers])
+        list_model.transformers = bmt.TransformerBlockList(
+            list(list_model.transformers)
+        )
         bmt.load(list_model, ckpt_path)
         return model
 
@@ -372,7 +371,9 @@ def test_main(test_fp16=True, test_fp32=True):
         pipe_model = bmt.BMTrainModelWrapper(model)
         for m in pipe_model.transformers:
             assert isinstance(m, bmt.CheckpointBlock)
-        pipe_model.transformers = bmt.PipelineTransformerBlockList([m for m in pipe_model.transformers])
+        pipe_model.transformers = bmt.PipelineTransformerBlockList(
+            list(pipe_model.transformers)
+        )
         bmt.load(pipe_model, ckpt_path)
         return model
 

@@ -46,11 +46,11 @@ class CMakeBuild(build_ext):
         # EXAMPLE_VERSION_INFO shows you how to pass a value into the C++ code
         # from Python.
         cmake_args = [
-	        f"-DCMAKE_CXX_STANDARD=14",
+            "-DCMAKE_CXX_STANDARD=14",
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}",
             f"-DPYTHON_EXECUTABLE={sys.executable}",
             f"-DPYTHON_VERSION={sys.version_info.major}.{sys.version_info.minor}",
-            f"-DCMAKE_BUILD_TYPE={cfg}",  # not used on MSVC, but no harm
+            f"-DCMAKE_BUILD_TYPE={cfg}",
         ]
 
         build_args = []
@@ -83,7 +83,9 @@ class CMakeBuild(build_ext):
         if os.path.exists(build_temp):
             shutil.rmtree(build_temp)
         os.makedirs(build_temp)
-        cmake_args += ["-DPython_ROOT_DIR=" + os.path.dirname(os.path.dirname(sys.executable))]
+        cmake_args += [
+            f"-DPython_ROOT_DIR={os.path.dirname(os.path.dirname(sys.executable))}"
+        ]
         subprocess.check_call(["cmake", ext.sourcedir] + cmake_args, cwd=build_temp)
         subprocess.check_call(["cmake", "--build", "."] + build_args, cwd=build_temp)
         

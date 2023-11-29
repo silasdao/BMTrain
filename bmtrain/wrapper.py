@@ -7,11 +7,11 @@ def make_distributed(model : torch.nn.Module):
         if model._parameters[kw] is not None:
             if not isinstance(model._parameters[kw], DistributedParameter):
                 model._parameters[kw] = DistributedParameter(model._parameters[kw], requires_grad=model._parameters[kw].requires_grad)
-    
+
     for kw in list(model._buffers.keys()):
         if model._buffers[kw] is not None:
             model._buffers[kw] = model._buffers[kw].cuda()
-    
+
     for kw in list(model._modules.keys()):
         if isinstance(model, torch.nn.ModuleList):
             if not isinstance(model._modules[kw], CheckpointBlock):
@@ -19,15 +19,17 @@ def make_distributed(model : torch.nn.Module):
         else:
             model._modules[kw] = model_wrapper_dispatch(model._modules[kw])
 
-    model.__class__ = type("bmtrain.Distributed" + model.__class__.__name__, (model.__class__, DistributedModule), {})
+    model.__class__ = type(
+        f"bmtrain.Distributed{model.__class__.__name__}",
+        (model.__class__, DistributedModule),
+        {},
+    )
     return model
 
 def model_wrapper_dispatch(model : torch.nn.Module):
-    if isinstance(model, TransformerBlockList):
-        return model
-    elif isinstance(model, DistributedModule):
-        return model
-    elif isinstance(model, CheckpointBlock):
+    if isinstance(
+        model, (TransformerBlockList, DistributedModule, CheckpointBlock)
+    ):
         return model
     else:
         return make_distributed(model)

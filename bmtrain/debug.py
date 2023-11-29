@@ -17,9 +17,7 @@ def set(key, value):
 
 def get(key, default=None):
     global DEBUG_VARS
-    if key in DEBUG_VARS:
-        return DEBUG_VARS[key]
-    return default
+    return DEBUG_VARS[key] if key in DEBUG_VARS else default
 
 def append(key, value):
     global DEBUG_VARS

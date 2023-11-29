@@ -15,16 +15,16 @@ class AdamOffloadOptimizer(torch.optim.Optimizer):
     _bmtrain_optimizer = True
 
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0, hold_steps=0):
-        if not 0.0 <= lr:
-            raise ValueError("Invalid learning rate: {}".format(lr))
-        if not 0.0 <= eps:
-            raise ValueError("Invalid epsilon value: {}".format(eps))
+        if lr < 0.0:
+            raise ValueError(f"Invalid learning rate: {lr}")
+        if eps < 0.0:
+            raise ValueError(f"Invalid epsilon value: {eps}")
         if not 0.0 <= betas[0] < 1.0:
-            raise ValueError("Invalid beta parameter at index 0: {}".format(betas[0]))
+            raise ValueError(f"Invalid beta parameter at index 0: {betas[0]}")
         if not 0.0 <= betas[1] < 1.0:
-            raise ValueError("Invalid beta parameter at index 1: {}".format(betas[1]))
-        if not 0.0 <= weight_decay:
-            raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
+            raise ValueError(f"Invalid beta parameter at index 1: {betas[1]}")
+        if weight_decay < 0.0:
+            raise ValueError(f"Invalid weight_decay value: {weight_decay}")
 
         defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
         super().__init__(params, defaults)
@@ -172,9 +172,12 @@ class AdamOffloadOptimizer(torch.optim.Optimizer):
                              "that doesn't match the size of optimizer's group")
 
         # Update the state
-        id_map = {old_id: p for old_id, p in
-                  zip(chain.from_iterable((g['params'] for g in saved_groups)),
-                      chain.from_iterable((g['params'] for g in groups)))}
+        id_map = dict(
+            zip(
+                chain.from_iterable((g['params'] for g in saved_groups)),
+                chain.from_iterable((g['params'] for g in groups)),
+            )
+        )
 
         # Copy state assigned to params (and cast tensors to appropriate types).
         # State that is not assigned to params is copied as is (needed for
@@ -187,7 +190,7 @@ class AdamOffloadOptimizer(torch.optim.Optimizer):
                 if "_param_fp32" not in v:
                     v["_param_fp32"] = torch.empty(param.size(), dtype=torch.float32, device="cpu")
                     v["_param_fp32"].copy_(param)
-                    
+
                 for name, dtype in [("exp_avg", torch.float32), ("exp_avg_sq", torch.float32), ("_param_fp32", torch.float32)]:
                     if name in v:
                         v[name] = v[name].to("cpu").to(dtype)
@@ -209,6 +212,7 @@ class AdamOffloadOptimizer(torch.optim.Optimizer):
         def update_group(group, new_group):
             new_group['params'] = group['params']
             return new_group
+
         param_groups = [
             update_group(g, ng) for g, ng in zip(groups, saved_groups)]
         self.__setstate__({'state': state, 'param_groups': param_groups})

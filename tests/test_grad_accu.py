@@ -26,8 +26,7 @@ class Linear(bmt.DistributedModule):
             self.bias = bmt.DistributedParameter(torch.empty(out_features, dtype=torch.float, device="cuda"), init_method=torch.nn.init.zeros_)
     
     def forward(self, input):
-        ret = F.linear(input, self.weight, self.bias)
-        return ret
+        return F.linear(input, self.weight, self.bias)
 
 def test_grad_accu():
     # normal distribute module
